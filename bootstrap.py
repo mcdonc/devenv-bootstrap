@@ -6,6 +6,7 @@ import subprocess
 import time
 import sys
 import shutil
+from packaging.version import Version
 
 
 def test_is_nixos():
@@ -82,48 +83,87 @@ def has_nix():
     return probe(cmd)
 
 
+def _find_binary(name):
+    """Find a binary on PATH or in known Nix profile locations."""
+    cmd = f"{pathadd} && which {name}"
+    result = run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if result.returncode == 0:
+        return result.stdout.strip()
+    # Fall back to known locations
+    for path in [
+        f"$HOME/.nix-profile/bin/{name}",
+        f"/nix/var/nix/profiles/default/bin/{name}",
+    ]:
+        expanded = os.path.expandvars(path)
+        if os.path.exists(expanded):
+            return expanded
+    return None
+
+
 def has_devenv():
-    cmd = f"{pathadd} && $HOME/.nix-profile/bin/devenv version || exit 1"
+    cmd = f"{pathadd} && devenv version || exit 1"
     return probe(cmd)
 
 
 def has_cachix():
-    cmd = f"{pathadd} && $HOME/.nix-profile/bin/cachix --version || exit 1"
+    cmd = f"{pathadd} && cachix --version || exit 1"
     return probe(cmd)
 
 
-def has_correct_devenv_version(desired):
-    if desired.startswith("v"):
-        desired = desired[1:]
-    if len(desired) == 3:
-        # tags e.g. v1.8 dont include the .0 but versions do
-        desired = desired + ".0"
-    cmd = f"{pathadd} && $HOME/.nix-profile/bin/devenv version"
-    version = run(
-        cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE
-    ).stdout.strip()
-    result = True
-    if not desired in version:
-        print(f'Incorrect devenv version (got "{version}", need {desired})')
-        result = False
-    return result
+def _parse_version(version_str):
+    """Extract a version number from a version string."""
+    version_str = version_str.strip()
+    if version_str.startswith("v"):
+        version_str = version_str[1:]
+    # Handle versions like "1.8" -> "1.8.0"
+    parts = version_str.split(".")
+    if len(parts) == 2:
+        version_str = version_str + ".0"
+    try:
+        return Version(version_str)
+    except Exception:
+        return None
 
 
-def has_correct_cachix_version(desired):
-    if desired.startswith("v"):
-        desired = desired[1:]
-    if len(desired) == 3:
-        # tags e.g. v1.8 dont include the .0 but versions do
-        desired = desired + ".0"
-    cmd = f"{pathadd} && $HOME/.nix-profile/bin/cachix --version"
-    version = run(
-        cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE
-    ).stdout.strip()
-    result = True
-    if not desired in version:
-        print(f'Incorrect cachix version (got "{version}", need {desired})')
-        result = False
-    return result
+def _get_installed_version(cmd):
+    """Run a version command and parse the output."""
+    result = run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if result.returncode != 0:
+        return None
+    output = result.stdout.strip()
+    # Extract version number — may be in format "devenv 2.1.2" or just "2.1.2"
+    # or "cachix 1.11.1"
+    for word in output.split():
+        v = _parse_version(word)
+        if v is not None:
+            return v
+    return None
+
+
+def has_acceptable_version(tool, desired, mode="eq"):
+    """Check if the installed version of a tool is acceptable.
+
+    mode: "eq" for exact match, "gte" for greater-than-or-equal.
+    """
+    desired_v = _parse_version(desired)
+    if desired_v is None:
+        print(f"Cannot parse desired version '{desired}'")
+        return False
+    cmd = f"{pathadd} && {tool} version 2>/dev/null || {tool} --version 2>/dev/null"
+    installed_v = _get_installed_version(cmd)
+    if installed_v is None:
+        print(f"Cannot determine installed version of {tool}")
+        return False
+    if mode == "gte":
+        ok = installed_v >= desired_v
+    else:
+        ok = installed_v == desired_v
+    if not ok:
+        print(
+            f'Incorrect {tool} version (got "{installed_v}", '
+            f'need {"≥" if mode == "gte" else ""}{desired_v})'
+        )
+    return ok
 
 
 def has_curl():
@@ -158,7 +198,12 @@ def uninstall(unattended=False):
         print("Nix not installed, skipping uninstall")
 
 
-def install(unattended=False, devenv_version="v2.1.2", cachix_version="v1.11.1"):
+def install(
+    unattended=False,
+    devenv_version="v2.1.2",
+    cachix_version="v1.11.1",
+    version_mode="eq",
+):
     if has_nix():
         print("Skipping installation of Nix, already installed")
     else:
@@ -185,7 +230,7 @@ def install(unattended=False, devenv_version="v2.1.2", cachix_version="v1.11.1")
 
     had_devenv = False
     if has_devenv():
-        if not has_correct_devenv_version(devenv_version):
+        if not has_acceptable_version("devenv", devenv_version, version_mode):
             print("Removing old devenv")
             remove_devenv_cmd = f"{pathadd} && nix profile remove devenv"
             run(remove_devenv_cmd)
@@ -201,7 +246,7 @@ def install(unattended=False, devenv_version="v2.1.2", cachix_version="v1.11.1")
         run_or_exit(install_devenv_cmd)
     had_cachix = False
     if has_cachix():
-        if not has_correct_cachix_version(cachix_version):
+        if not has_acceptable_version("cachix", cachix_version, version_mode):
             print("Removing old cachix")
             remove_cachix_cmd = f"{pathadd} && nix profile remove cachix"
             run(remove_cachix_cmd)
@@ -228,7 +273,7 @@ def install(unattended=False, devenv_version="v2.1.2", cachix_version="v1.11.1")
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(
-        description="Wih no arguments, install dependencies of devenv",
+        description="With no arguments, install dependencies of devenv",
     )
     ap.add_argument(
         "--uninstall",
@@ -254,8 +299,20 @@ if __name__ == "__main__":
         help="cachix version to install (e.g. v1.11.1)",
         default="v1.11.1",
     )
+    ap.add_argument(
+        "--version-mode",
+        type=str,
+        choices=["eq", "gte"],
+        help="Version matching: 'eq' for exact, 'gte' for >= (default: gte)",
+        default="gte",
+    )
     args = ap.parse_args()
     if args.uninstall:
         uninstall(args.unattended)
     else:
-        install(args.unattended, args.devenv_version, args.cachix_version)
+        install(
+            args.unattended,
+            args.devenv_version,
+            args.cachix_version,
+            args.version_mode,
+        )
