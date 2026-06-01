@@ -6,7 +6,50 @@ import subprocess
 import time
 import sys
 import shutil
-from packaging.version import Version
+
+
+class Version:
+    """A simple PEP 440-like version for dotted version strings."""
+
+    def __init__(self, version_str):
+        self._version_str = version_str
+        self._parts = tuple(int(p) for p in version_str.split("."))
+
+    def __eq__(self, other):
+        if not isinstance(other, Version):
+            return NotImplemented
+        return self._parts == other._parts
+
+    def __ne__(self, other):
+        if not isinstance(other, Version):
+            return NotImplemented
+        return self._parts != other._parts
+
+    def __lt__(self, other):
+        if not isinstance(other, Version):
+            return NotImplemented
+        return self._parts < other._parts
+
+    def __le__(self, other):
+        if not isinstance(other, Version):
+            return NotImplemented
+        return self._parts <= other._parts
+
+    def __gt__(self, other):
+        if not isinstance(other, Version):
+            return NotImplemented
+        return self._parts > other._parts
+
+    def __ge__(self, other):
+        if not isinstance(other, Version):
+            return NotImplemented
+        return self._parts >= other._parts
+
+    def __repr__(self):
+        return f"Version('{self._version_str}')"
+
+    def __str__(self):
+        return self._version_str
 
 
 def test_is_nixos():
