@@ -174,7 +174,7 @@ def _get_installed_version(cmd):
     if result.returncode != 0:
         return None
     output = result.stdout.strip()
-    # Extract version number — may be in format "devenv 2.1.2" or just "2.1.2"
+    # Extract version number — may be in format "devenv 2.2.2" or just "2.2.2"
     # or "cachix 1.11.1"
     for word in output.split():
         v = _parse_version(word)
@@ -243,8 +243,8 @@ def uninstall(unattended=False):
 
 def install(
     unattended=False,
-    devenv_version="v2.1.2",
-    cachix_version="v1.11.1",
+    devenv_version="v2.2.2",
+    cachix_version="v1.12.0",
     version_mode="eq",
 ):
     if has_nix():
@@ -333,14 +333,14 @@ if __name__ == "__main__":
     ap.add_argument(
         "--devenv-version",
         type=str,
-        help="devenv version to install (e.g. v2.1.2)",
-        default="v2.1.2",
+        help="devenv version to install (e.g. v2.2.2)",
+        default="v2.2.2",
     )
     ap.add_argument(
         "--cachix-version",
         type=str,
-        help="cachix version to install (e.g. v1.11.1)",
-        default="v1.11.1",
+        help="cachix version to install (e.g. v1.12.0)",
+        default="v1.12.0",
     )
     ap.add_argument(
         "--version-mode",
