@@ -19,7 +19,7 @@ curl -sSf https://raw.githubusercontent.com/mcdonc/devenv-bootstrap/main/bootstr
 ```
 --unattended       Don't ask questions
 --uninstall        Uninstall Nix and devenv
---devenv-version   devenv version to install (default: v2.1.2)
+--devenv-version   devenv version to install (default: v2.3.1)
 --cachix-version   cachix version to install (default: v1.11.1)
 ```
 
