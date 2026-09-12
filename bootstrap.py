@@ -243,7 +243,7 @@ def uninstall(unattended=False):
 
 def install(
     unattended=False,
-    devenv_version="v2.2.2",
+    devenv_version="v2.3.1",
     cachix_version="v1.12.0",
     version_mode="eq",
 ):
@@ -333,8 +333,8 @@ if __name__ == "__main__":
     ap.add_argument(
         "--devenv-version",
         type=str,
-        help="devenv version to install (e.g. v2.2.2)",
-        default="v2.2.2",
+        help="devenv version to install (e.g. v2.3.1)",
+        default="v2.3.1",
     )
     ap.add_argument(
         "--cachix-version",
